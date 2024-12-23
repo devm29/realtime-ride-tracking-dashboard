@@ -93,6 +93,26 @@ describe('authentication and roles', () => {
     assert.deepEqual(payload.location, { lat: 40.72, lng: -73.95 });
   });
 
+  it('follows one driver: snapshot on subscribe, offline notice, unsubscribe', async () => {
+    const dashboard = ctx.connect('/dashboard', { auth: { token: dispatcherToken } });
+    await nextEvent(dashboard, 'connected');
+
+    dashboard.emit('subscribe', { driverId: 'driver1' });
+    const data = await nextEvent(dashboard, 'driver_data');
+    assert.equal(data.driverId, 'driver1');
+    assert.equal(data.isOnline, true);
+    assert.equal(typeof data.location.lat, 'number');
+
+    dashboard.emit('subscribe', { driverId: 'driver2' });
+    assert.equal((await nextEvent(dashboard, 'driver_offline')).driverId, 'driver2');
+
+    dashboard.emit('unsubscribe');
+    assert.equal((await nextEvent(dashboard, 'unsubscribed')).driverId, 'driver2');
+
+    dashboard.emit('get_driver_info', { driverId: 'driver1' });
+    assert.equal((await nextEvent(dashboard, 'driver_info')).driverId, 'driver1');
+  });
+
   it('rejects subscriptions to unknown drivers', async () => {
     const dashboard = ctx.connect('/dashboard', { auth: { token: dispatcherToken } });
     await nextEvent(dashboard, 'connected');
