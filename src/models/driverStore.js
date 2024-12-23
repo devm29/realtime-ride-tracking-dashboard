@@ -1,5 +1,4 @@
 const config = require('../config/config');
-const logger = require('../utils/logger');
 
 class DriverStore {
   constructor({

@@ -1,7 +1,5 @@
 const crypto = require('crypto');
 
-require('dotenv').config();
-
 const nodeEnv = process.env.NODE_ENV || 'development';
 
 function listFromEnv(name, fallback) {
