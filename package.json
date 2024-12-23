@@ -4,8 +4,8 @@
   "description": "Real-time driver tracking backend: Express REST API and Socket.IO namespaces",
   "main": "src/server.js",
   "scripts": {
-    "start": "node --env-file-if-exists=.env src/server.js",
-    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
     "test": "NODE_ENV=test node --test \"test/*.test.js\"",
     "lint": "eslint .",
     "simulate": "node scripts/simulate-drivers.js"

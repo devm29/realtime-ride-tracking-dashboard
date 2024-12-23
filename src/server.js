@@ -1,3 +1,13 @@
+const fs = require('fs');
+const path = require('path');
+
+// Load .env before the config reads process.env. Variables already set in the environment win.
+// (Not --env-file-if-exists: on Node 22, --watch crashes trying to watch a missing .env.)
+const envFile = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envFile)) {
+  process.loadEnvFile(envFile);
+}
+
 const config = require('./config/config');
 const logger = require('./utils/logger');
 const { createApp } = require('./app');
