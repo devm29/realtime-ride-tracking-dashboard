@@ -27,15 +27,17 @@ function LoginPage({ onLogin }) {
     try {
       const response = await axios.post('/api/login', credentials);
       
-      if (response.data.success) {
+      if (response.data.profile?.role !== 'dispatcher') {
+        setError('This sign-in is for the dispatch desk. Drivers use the Driver App.');
+      } else {
         onLogin({
           username: credentials.username,
           profile: response.data.profile,
           token: response.data.token
         });
       }
-    } catch {
-      setError('Login failed. Please check your credentials.');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -62,7 +64,7 @@ function LoginPage({ onLogin }) {
               name="username"
               value={credentials.username}
               onChange={handleInputChange}
-              placeholder="Enter any username"
+              placeholder="dispatcher"
               required
             />
           </div>
@@ -75,7 +77,7 @@ function LoginPage({ onLogin }) {
               name="password"
               value={credentials.password}
               onChange={handleInputChange}
-              placeholder="Enter any password"
+              placeholder="dispatch1"
               required
             />
           </div>
@@ -112,7 +114,7 @@ function LoginPage({ onLogin }) {
         </div>
 
         <div className="demo-note">
-          <p><strong>Demo Access:</strong> Enter any username and password to access the dashboard</p>
+          <p><strong>Demo Access:</strong> dispatcher / dispatch1</p>
         </div>
       </div>
     </div>

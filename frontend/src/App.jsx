@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import axios from 'axios';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import DriverApp from './components/DriverApp';
@@ -15,6 +16,9 @@ function App() {
   };
 
   const handleLogout = () => {
+    if (user?.token) {
+      axios.post('/api/logout', {}, { headers: { Authorization: `Bearer ${user.token}` } }).catch(() => {});
+    }
     setUser(null);
     setIsLoggedIn(false);
   };

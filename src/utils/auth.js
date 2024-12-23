@@ -1,7 +1,9 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const config = require('../config/config');
 const logger = require('./logger');
 
+// Demo accounts only. Drivers publish their own position; the dispatcher watches all of them.
 const DRIVERS = {
   driver1: {
     username: 'driver1',
@@ -38,90 +40,129 @@ const DRIVERS = {
   }
 };
 
-/**
- * @param {string} username 
- * @param {string} password 
- * @returns {Object|null} 
- */
-function validateDriverCredentials(username, password) {
-  const driver = DRIVERS[username];
-  if (driver && driver.password === password) {
-    return driver.profile;
+const DISPATCHERS = {
+  dispatcher: {
+    username: 'dispatcher',
+    password: 'dispatch1',
+    profile: { id: 'dispatcher', name: 'Dispatch Desk' }
+  }
+};
+
+const ROLES = { DRIVER: 'driver', DISPATCHER: 'dispatcher' };
+
+function safeEqual(a, b) {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function validateCredentials(username, password) {
+  if (Object.hasOwn(DRIVERS, username) && safeEqual(DRIVERS[username].password, password)) {
+    return { ...DRIVERS[username].profile, role: ROLES.DRIVER };
+  }
+  if (Object.hasOwn(DISPATCHERS, username) && safeEqual(DISPATCHERS[username].password, password)) {
+    return { ...DISPATCHERS[username].profile, role: ROLES.DISPATCHER };
   }
   return null;
 }
 
-/**
- * @param {Object} driverProfile 
- * @returns {string} 
- */
-function generateToken(driverProfile) {
-  return jwt.sign(
-    { 
-      driverId: driverProfile.id,
-      name: driverProfile.name,
-      vehicle: driverProfile.vehicle
-    },
-    config.jwtSecret,
-    { expiresIn: config.jwtExpiry }
-  );
+function getDriverProfile(driverId) {
+  return Object.hasOwn(DRIVERS, driverId) ? DRIVERS[driverId].profile : null;
 }
 
-/**
- * @param {string} token
- * @returns {Object|null} 
- */
+/** Signs a token and returns it with the id and expiry the store needs for revocation. */
+function generateToken(profile) {
+  const jti = crypto.randomUUID();
+  const claims = { sub: profile.id, role: profile.role, name: profile.name };
+  if (profile.role === ROLES.DRIVER) {
+    claims.driverId = profile.id;
+    claims.vehicle = profile.vehicle;
+  }
+  const token = jwt.sign(claims, config.jwtSecret, {
+    expiresIn: config.jwtExpiry,
+    jwtid: jti,
+    algorithm: 'HS256'
+  });
+  const { exp } = jwt.decode(token);
+  return { token, jti, expiresAt: new Date(exp * 1000) };
+}
+
 function verifyToken(token) {
   try {
-    return jwt.verify(token, config.jwtSecret);
+    return jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] });
   } catch (error) {
     logger.warn('Token verification failed:', error.message);
     return null;
   }
 }
 
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+/** A token counts only if it verifies and has not been revoked by logout. */
+function resolveToken(token, store) {
+  const decoded = token ? verifyToken(token) : null;
+  if (!decoded || !decoded.jti || !store.isTokenActive(decoded.jti)) return null;
+  return decoded;
+}
 
+function bearerToken(req) {
+  const [scheme, token] = (req.headers.authorization || '').split(' ');
+  return scheme === 'Bearer' && token ? token : null;
+}
+
+function authenticateToken(req, res, next) {
+  const token = bearerToken(req);
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  const decoded = verifyToken(token);
+  const decoded = resolveToken(token, req.app.locals.store);
   if (!decoded) {
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
+  req.token = token;
   req.user = decoded;
   next();
 }
 
-function authenticateSocketToken(socket, next) {
-  try {
-    const token = socket.handshake.auth.token;
-    
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Not allowed for this role' });
+    }
+    next();
+  };
+}
+
+/** Socket.IO namespace middleware: verifies the handshake token and the caller's role. */
+function socketAuth(store, ...roles) {
+  return (socket, next) => {
+    const token = socket.handshake.auth && socket.handshake.auth.token;
     if (!token) {
       return next(new Error('Authentication token required'));
     }
 
-    const decoded = verifyToken(token);
+    const decoded = resolveToken(token, store);
     if (!decoded) {
       return next(new Error('Invalid or expired token'));
+    }
+    if (!roles.includes(decoded.role)) {
+      return next(new Error('Not allowed for this role'));
     }
 
     socket.user = decoded;
     next();
-  } catch (error) {
-    next(new Error('Authentication failed'));
-  }
+  };
 }
 
 module.exports = {
   DRIVERS,
-  validateDriverCredentials,
+  ROLES,
+  validateCredentials,
+  getDriverProfile,
   generateToken,
   verifyToken,
+  resolveToken,
   authenticateToken,
-  authenticateSocketToken
-}; 
+  requireRole,
+  socketAuth
+};

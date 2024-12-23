@@ -1,147 +1,85 @@
-const { authenticateSocketToken } = require('../utils/auth');
+const { socketAuth, getDriverProfile, ROLES } = require('../utils/auth');
+const { recordDriverLocation } = require('../services/locationService');
 const logger = require('../utils/logger');
-const { DRIVERS } = require('../utils/auth');
 
 /**
- * Driver WebSocket namespace handler
- * Handles real-time location updates from drivers
- * 
- * Namespace: /driver/update
- * Authentication: Required via JWT token
- * Events:
- * - connection: Driver connects and authenticates
- * - location_update: Driver sends location data
- * - disconnect: Driver disconnects
+ * Namespace /driver/update — drivers stream their own position.
+ * The handshake must carry a live driver token; the driver id always comes from that token.
  */
 function setupDriverSocket(io, driverStore) {
   const driverNamespace = io.of('/driver/update');
-
-  // Authentication middleware for driver namespace
-  driverNamespace.use(authenticateSocketToken);
+  driverNamespace.use(socketAuth(driverStore, ROLES.DRIVER));
 
   driverNamespace.on('connection', (socket) => {
-    const driverId = socket.user.driverId;
-    const driverName = socket.user.name;
+    const { driverId, name: driverName, jti } = socket.user;
 
-    logger.info(`Driver ${driverName} (${driverId}) connected via WebSocket`);
-
-    // Store socket connection for this driver
+    socket.join(`session:${jti}`);
     driverStore.setDriverSocket(driverId, socket.id);
+    logger.info(`Driver ${driverId} connected via WebSocket`);
 
-    // Handle location updates from driver
     socket.on('location_update', (data) => {
-      try {
-        const { lat, lng } = data;
-
-        // Validate location data
-        if (typeof lat !== 'number' || typeof lng !== 'number') {
-          socket.emit('error', { 
-            message: 'Invalid location data: lat and lng must be numbers' 
-          });
-          return;
-        }
-
-        // Validate coordinate ranges
-        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-          socket.emit('error', { 
-            message: 'Invalid coordinates: lat must be -90 to 90, lng must be -180 to 180' 
-          });
-          return;
-        }
-
-        // Get driver profile
-        const driverProfile = Object.values(DRIVERS)
-          .find(driver => driver.profile.id === driverId)?.profile;
-
-        if (!driverProfile) {
-          socket.emit('error', { 
-            message: 'Driver profile not found' 
-          });
-          return;
-        }
-
-        const wasOnlineBefore = driverStore.isDriverOnline(driverId);
-
-        // Update driver location in store
-        driverStore.updateDriverLocation(driverId, lat, lng, driverProfile);
-
-        // Confirm location update to driver
-        socket.emit('location_updated', {
-          success: true,
-          location: { lat, lng },
-          timestamp: new Date().toISOString()
-        });
-
-        // Broadcast to dashboard clients (handled by dashboard socket)
-        const dashboardNamespace = socket.nsp.server.of('/dashboard');
-        
-        dashboardNamespace.emit('driver_location_update', {
-          driverId,
-          profile: driverProfile,
-          location: { lat, lng },
-          timestamp: new Date().toISOString()
-        });
-
-        if (!wasOnlineBefore) {
-          const onlineDrivers = driverStore.getOnlineDrivers();
-          dashboardNamespace.emit('online_drivers', {
-            drivers: onlineDrivers,
-            count: onlineDrivers.length,
-            timestamp: new Date().toISOString()
-          });
-
-          dashboardNamespace.emit('driver_connected', {
-            driverId,
-            profile: driverProfile,
-            location: { lat, lng },
-            timestamp: new Date().toISOString()
-          });
-        }
-
-        logger.info(`Real-time location update from ${driverName} (${driverId}): ${lat}, ${lng}`);
-
-      } catch (error) {
-        logger.error('Location update error:', error);
-        socket.emit('error', { 
-          message: 'Failed to process location update' 
-        });
+      // The handshake was checked once; re-check so a logged-out or expired session stops here.
+      if (!driverStore.isTokenActive(jti) || socket.user.exp * 1000 < Date.now()) {
+        socket.emit('error', { message: 'Session expired, please sign in again' });
+        socket.disconnect(true);
+        return;
       }
+
+      const { lat, lng } = data || {};
+
+      if (typeof lat !== 'number' || typeof lng !== 'number') {
+        socket.emit('error', {
+          message: 'Invalid location data: lat and lng must be numbers'
+        });
+        return;
+      }
+
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        socket.emit('error', {
+          message: 'Invalid coordinates: lat must be -90 to 90, lng must be -180 to 180'
+        });
+        return;
+      }
+
+      if (!getDriverProfile(driverId)) {
+        socket.emit('error', { message: 'Driver profile not found' });
+        return;
+      }
+
+      recordDriverLocation({ store: driverStore, io }, driverId, lat, lng);
+
+      socket.emit('location_updated', {
+        success: true,
+        location: { lat, lng },
+        timestamp: new Date().toISOString()
+      });
     });
 
-    // Handle driver requesting to start location sharing
     socket.on('start_sharing', () => {
       socket.emit('sharing_started', {
         message: 'Location sharing started',
         driverId,
         timestamp: new Date().toISOString()
       });
-      logger.info(`Driver ${driverName} (${driverId}) started location sharing`);
     });
 
-    // Handle driver requesting to stop location sharing
     socket.on('stop_sharing', () => {
       socket.emit('sharing_stopped', {
         message: 'Location sharing stopped',
         driverId,
         timestamp: new Date().toISOString()
       });
-      logger.info(`Driver ${driverName} (${driverId}) stopped location sharing`);
     });
 
-    // Handle ping/pong for connection health
     socket.on('ping', () => {
       socket.emit('pong', { timestamp: new Date().toISOString() });
     });
 
-    // Handle driver disconnect
     socket.on('disconnect', (reason) => {
-      logger.info(`Driver ${driverName} (${driverId}) disconnected: ${reason}`);
-      
-      // Remove driver from online status completely
+      logger.info(`Driver ${driverId} disconnected: ${reason}`);
       driverStore.removeDriver(driverId);
-      
-      // Notify dashboard clients that driver went offline
-      const dashboardNamespace = socket.nsp.server.of('/dashboard');
+
+      const dashboardNamespace = io.of('/dashboard');
       dashboardNamespace.emit('driver_disconnected', {
         driverId,
         profile: { id: driverId, name: driverName },
@@ -149,7 +87,6 @@ function setupDriverSocket(io, driverStore) {
         reason
       });
 
-      // Also broadcast updated online drivers list
       const onlineDrivers = driverStore.getOnlineDrivers();
       dashboardNamespace.emit('online_drivers', {
         drivers: onlineDrivers,
@@ -158,12 +95,6 @@ function setupDriverSocket(io, driverStore) {
       });
     });
 
-    // Handle authentication errors during connection
-    socket.on('connect_error', (error) => {
-      logger.error(`Driver connection error for ${driverId}:`, error.message);
-    });
-
-    // Send welcome message to driver
     socket.emit('connected', {
       message: 'Successfully connected to driver location service',
       driverId,
@@ -175,4 +106,4 @@ function setupDriverSocket(io, driverStore) {
   return driverNamespace;
 }
 
-module.exports = { setupDriverSocket }; 
+module.exports = { setupDriverSocket };

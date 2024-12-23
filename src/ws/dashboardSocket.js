@@ -1,26 +1,18 @@
 const logger = require('../utils/logger');
 const config = require('../config/config');
+const { socketAuth, getDriverProfile, ROLES } = require('../utils/auth');
 
 /**
- * Dashboard WebSocket namespace handler
- * Handles dashboard client connections and driver location subscriptions
- * 
- * Namespace: /dashboard
- * Authentication: Not required (public dashboard)
- * Events:
- * - connection: Dashboard client connects
- * - subscribe: Client subscribes to a specific driver
- * - unsubscribe: Client unsubscribes from current driver
- * - get_online_drivers: Client requests list of online drivers
+ * Namespace /dashboard — dispatchers watch online drivers and follow one at a time.
+ * Driver positions are personal data, so the handshake needs a live dispatcher token.
  */
 function setupDashboardSocket(io, driverStore) {
   const dashboardNamespace = io.of('/dashboard');
+  dashboardNamespace.use(socketAuth(driverStore, ROLES.DISPATCHER));
 
   dashboardNamespace.on('connection', (socket) => {
     logger.info(`Dashboard client connected: ${socket.id}`);
-
-    // Join dashboard room for broadcasting
-    socket.join('dashboard');
+    socket.join(`session:${socket.user.jti}`);
 
     let currentDriverId = null;
     let updateInterval = null;
@@ -29,10 +21,14 @@ function setupDashboardSocket(io, driverStore) {
     // Handle driver subscription
     socket.on('subscribe', (data) => {
       try {
-        const { driverId } = data;
+        const { driverId } = data || {};
 
         if (!driverId) {
           socket.emit('error', { message: 'Driver ID is required for subscription' });
+          return;
+        }
+        if (!getDriverProfile(driverId)) {
+          socket.emit('error', { message: `Unknown driver ${driverId}` });
           return;
         }
 
@@ -160,8 +156,8 @@ function setupDashboardSocket(io, driverStore) {
     // Handle request for specific driver info
     socket.on('get_driver_info', (data) => {
       try {
-        const { driverId } = data;
-        
+        const { driverId } = data || {};
+
         if (!driverId) {
           socket.emit('error', { message: 'Driver ID is required' });
           return;
@@ -209,8 +205,6 @@ function setupDashboardSocket(io, driverStore) {
       if (updateInterval) clearInterval(updateInterval);
       if (offlineNotificationInterval) clearInterval(offlineNotificationInterval);
       
-      // Leave dashboard room
-      socket.leave('dashboard');
     });
 
     // Send welcome message
@@ -227,15 +221,13 @@ function setupDashboardSocket(io, driverStore) {
       }
     });
 
-    // Send initial online drivers list
-    setTimeout(() => {
-      const onlineDrivers = driverStore.getOnlineDrivers();
-      socket.emit('online_drivers', {
-        drivers: onlineDrivers,
-        count: onlineDrivers.length,
-        timestamp: new Date().toISOString()
-      });
-    }, 1000); // Small delay to ensure client is ready
+    // Listeners are registered before the client connects, so no delay is needed.
+    const onlineDrivers = driverStore.getOnlineDrivers();
+    socket.emit('online_drivers', {
+      drivers: onlineDrivers,
+      count: onlineDrivers.length,
+      timestamp: new Date().toISOString()
+    });
   });
 
   return dashboardNamespace;

@@ -32,7 +32,8 @@ function Dashboard({ user, onLogout }) {
 
   useEffect(() => {
     const socket = io('/dashboard', {
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      auth: { token: user.token }
     });
     socketRef.current = socket;
 
@@ -46,9 +47,11 @@ function Dashboard({ user, onLogout }) {
       setError('Connection lost. Attempting to reconnect...');
     });
 
-    socket.on('connect_error', () => {
+    socket.on('connect_error', (err) => {
       setConnectionStatus('error');
-      setError('Failed to connect to server. Please check your connection.');
+      setError(/token|not allowed/i.test(err.message)
+        ? 'Your session has expired. Please sign in again.'
+        : 'Failed to connect to server. Please check your connection.');
     });
 
     socket.on('connected', () => {
@@ -106,7 +109,7 @@ function Dashboard({ user, onLogout }) {
     return () => {
       socket.disconnect();
     };
-  }, [addNotification]);
+  }, [addNotification, user.token]);
 
   const handleDriverSelection = (driverId) => {
     if (!socketRef.current) return;

@@ -1,15 +1,15 @@
 const express = require('express');
 const { updateLocation, getOnlineDrivers, getDriverLocation, getStats } = require('../controllers/driverController');
-const { authenticateToken } = require('../utils/auth');
+const { authenticateToken, requireRole, ROLES } = require('../utils/auth');
 
 const router = express.Router();
 
-router.post('/update', authenticateToken, updateLocation);
+router.use(authenticateToken);
 
-router.get('/online', getOnlineDrivers);
+router.post('/update', requireRole(ROLES.DRIVER), updateLocation);
+router.get('/online', requireRole(ROLES.DISPATCHER), getOnlineDrivers);
+router.get('/stats', requireRole(ROLES.DISPATCHER), getStats);
+// Drivers may read their own position; the controller enforces that.
+router.get('/:driverId/location', requireRole(ROLES.DRIVER, ROLES.DISPATCHER), getDriverLocation);
 
-router.get('/:driverId/location', getDriverLocation);
-
-router.get('/stats', getStats);
-
-module.exports = router; 
+module.exports = router;

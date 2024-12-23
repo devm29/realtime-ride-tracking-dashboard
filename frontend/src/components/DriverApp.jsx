@@ -25,12 +25,13 @@ function DriverApp() {
     try {
       const response = await axios.post('/api/login', credentials);
       
-      if (response.data.success) {
+      if (response.data.profile?.role !== 'driver') {
+        setError('Only driver accounts can share a location.');
+      } else {
         setToken(response.data.token);
         setDriverProfile(response.data.profile);
         setIsLoggedIn(true);
         setStatus('online');
-        console.log('Driver logged in:', response.data.profile.name);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
@@ -69,59 +70,42 @@ function DriverApp() {
     const socket = socketRef.current;
 
     socket.on('connect', () => {
-      console.log('Connected to driver service');
       setStatus('connected - sharing location');
     });
 
     socket.on('location_updated', (data) => {
-      console.log('Location updated:', data);
-      setCurrentLocation(data.location);
+      setCurrentLocation({ ...data.location, timestamp: data.timestamp });
     });
 
     socket.on('error', (error) => {
-      console.error('Socket error:', error);
       setError(error.message);
     });
 
+    socket.on('connect_error', (err) => {
+      setError(`Could not connect: ${err.message}`);
+      setStatus('offline');
+    });
+
+    // One channel is enough: every update used to go out over the socket and REST.
     locationIntervalRef.current = setInterval(() => {
-      const location = generateRandomLocation();
-      
-      socket.emit('location_update', location);
-      
-      axios.post('/api/driver/update', location, {
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(err => console.error('REST update failed:', err));
-      
+      socket.emit('location_update', generateRandomLocation());
     }, 10000);
 
-    const initialLocation = generateRandomLocation();
-    socket.emit('location_update', initialLocation);
-    
-    axios.post('/api/driver/update', initialLocation, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).catch(err => console.error('Initial location failed:', err));
+    socket.emit('location_update', generateRandomLocation());
   };
 
 
-  const stopSharing = async () => {
+  // Disconnecting takes the driver offline server-side; the session stays valid so sharing can restart.
+  const stopSharing = () => {
     setIsSharing(false);
     setStatus('online - not sharing');
-    
+
     if (locationIntervalRef.current) {
       clearInterval(locationIntervalRef.current);
     }
-    
+
     if (socketRef.current) {
       socketRef.current.disconnect();
-    }
-
-    try {
-      await axios.post('/api/logout', {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('Driver removed from online status');
-    } catch (err) {
-      console.error('Failed to logout:', err);
     }
   };
 
@@ -132,14 +116,9 @@ function DriverApp() {
       stopSharing();
     }
 
-    try {
-      await axios.post('/api/logout', {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('Driver logged out and removed from online status');
-    } catch (err) {
-      console.error('Failed to logout:', err);
-    }
+    await axios.post('/api/logout', {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(() => {});
 
     setIsLoggedIn(false);
     setDriverProfile(null);
