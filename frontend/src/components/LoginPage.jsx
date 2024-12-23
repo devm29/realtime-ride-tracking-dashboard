@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 import './LoginPage.css';
 
@@ -25,7 +25,7 @@ function LoginPage({ onLogin }) {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:3001/api/login', credentials);
+      const response = await axios.post('/api/login', credentials);
       
       if (response.data.success) {
         onLogin({
@@ -34,7 +34,7 @@ function LoginPage({ onLogin }) {
           token: response.data.token
         });
       }
-    } catch (err) {
+    } catch {
       setError('Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);

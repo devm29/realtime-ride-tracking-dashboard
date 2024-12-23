@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import io from 'socket.io-client';
 import './Dashboard.css';
 
@@ -13,127 +13,101 @@ function Dashboard({ user, onLogout }) {
   const [notifications, setNotifications] = useState([]);
 
   const socketRef = useRef(null);
+  const selectedDriverIdRef = useRef('');
 
- 
-  useEffect(() => {
-    initializeSocket();
-    
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
-  }, []);
-
-
-  const initializeSocket = () => {
-    try {
-      socketRef.current = io('http://localhost:3001/dashboard', {
-        transports: ['websocket', 'polling']
-      });
-
-      const socket = socketRef.current;
-
-      socket.on('connect', () => {
-        console.log('Connected to dashboard service');
-        setConnectionStatus('connected');
-        setError('');
-      });
-
-      socket.on('disconnect', (reason) => {
-        console.log('Disconnected from dashboard service:', reason);
-        setConnectionStatus('disconnected');
-        setError('Connection lost. Attempting to reconnect...');
-      });
-
-      socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
-        setConnectionStatus('error');
-        setError('Failed to connect to server. Please check your connection.');
-      });
-
-      socket.on('connected', (data) => {
-        console.log('Dashboard service ready:', data);
-        addNotification('Connected to dashboard service', 'success');
-      });
-
-      socket.on('online_drivers', (data) => {
-        console.log('Received online drivers:', data);
-        setOnlineDrivers(data.drivers || []);
-        setLastUpdate(new Date().toISOString());
-      });
-
-      socket.on('driver_data', (data) => {
-        console.log('Received driver data:', data);
-        setSelectedDriverData(data);
-        setLastUpdate(new Date().toISOString());
-        setError('');
-      });
-
-      socket.on('driver_offline', (data) => {
-        console.log('Driver offline:', data);
-        setSelectedDriverData(null);
-        addNotification(`Driver ${data.driverId} is offline`, 'warning');
-      });
-
-      socket.on('OFFLINE_DRIVER', (data) => {
-        console.log('Offline driver notification:', data);
-        addNotification(`Driver ${data.driverId} is offline - no recent location data`, 'error');
-      });
-
-      socket.on('subscribed', (data) => {
-        console.log('Subscribed to driver:', data);
-        addNotification(`Subscribed to driver ${data.driverId}`, 'success');
-      });
-
-      socket.on('unsubscribed', (data) => {
-        console.log('Unsubscribed from driver:', data);
-        addNotification(`Unsubscribed from driver ${data.driverId}`, 'info');
-      });
-
-      socket.on('error', (data) => {
-        console.error('Socket error:', data);
-        setError(data.message || 'An error occurred');
-        addNotification(data.message || 'An error occurred', 'error');
-      });
-
-      socket.on('driver_disconnected', (data) => {
-        console.log('Driver disconnected:', data);
-        addNotification(`Driver ${data.profile?.name || data.driverId} went offline`, 'warning');
-        
-        if (selectedDriverId === data.driverId) {
-          setSelectedDriverData(null);
-          setSelectedDriverId('');
-        }
-      });
-
-      socket.on('driver_connected', (data) => {
-        console.log('Driver connected:', data);
-        addNotification(`Driver ${data.profile?.name || data.driverId} came online`, 'success');
-      });
-
-    } catch (error) {
-      console.error('Failed to initialize socket:', error);
-      setError('Failed to initialize connection');
-    }
-  };
-
-  const addNotification = (message, type = 'info') => {
+  const addNotification = useCallback((message, type = 'info') => {
     const notification = {
-      id: Date.now(),
+      id: `${Date.now()}-${Math.random()}`,
       message,
       type,
       timestamp: new Date().toISOString()
     };
-    
-    setNotifications(prev => [notification, ...prev.slice(0, 4)]); // Keep last 5 notifications
-    
+
+    setNotifications(prev => [notification, ...prev.slice(0, 4)]);
+
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== notification.id));
     }, 5000);
-  };
+  }, []);
 
-  
+  useEffect(() => {
+    const socket = io('/dashboard', {
+      transports: ['websocket', 'polling']
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setConnectionStatus('connected');
+      setError('');
+    });
+
+    socket.on('disconnect', () => {
+      setConnectionStatus('disconnected');
+      setError('Connection lost. Attempting to reconnect...');
+    });
+
+    socket.on('connect_error', () => {
+      setConnectionStatus('error');
+      setError('Failed to connect to server. Please check your connection.');
+    });
+
+    socket.on('connected', () => {
+      addNotification('Connected to dashboard service', 'success');
+    });
+
+    socket.on('online_drivers', (data) => {
+      setOnlineDrivers(data.drivers || []);
+      setLastUpdate(new Date().toISOString());
+    });
+
+    socket.on('driver_data', (data) => {
+      setSelectedDriverData(data);
+      setLastUpdate(new Date().toISOString());
+      setError('');
+    });
+
+    socket.on('driver_offline', (data) => {
+      setSelectedDriverData(null);
+      addNotification(`Driver ${data.driverId} is offline`, 'warning');
+    });
+
+    socket.on('OFFLINE_DRIVER', (data) => {
+      addNotification(`Driver ${data.driverId} is offline - no recent location data`, 'error');
+    });
+
+    socket.on('subscribed', (data) => {
+      addNotification(`Subscribed to driver ${data.driverId}`, 'success');
+    });
+
+    socket.on('unsubscribed', (data) => {
+      addNotification(`Unsubscribed from driver ${data.driverId}`, 'info');
+    });
+
+    socket.on('error', (data) => {
+      setError(data.message || 'An error occurred');
+      addNotification(data.message || 'An error occurred', 'error');
+    });
+
+    socket.on('driver_disconnected', (data) => {
+      addNotification(`Driver ${data.profile?.name || data.driverId} went offline`, 'warning');
+
+      // A ref, not state: this handler is registered once and would otherwise see a stale id.
+      if (selectedDriverIdRef.current === data.driverId) {
+        selectedDriverIdRef.current = '';
+        setSelectedDriverData(null);
+        setSelectedDriverId('');
+      }
+    });
+
+    socket.on('driver_connected', (data) => {
+      addNotification(`Driver ${data.profile?.name || data.driverId} came online`, 'success');
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [addNotification]);
+
   const handleDriverSelection = (driverId) => {
     if (!socketRef.current) return;
 
@@ -141,6 +115,7 @@ function Dashboard({ user, onLogout }) {
       socketRef.current.emit('unsubscribe');
     }
 
+    selectedDriverIdRef.current = driverId;
     setSelectedDriverId(driverId);
     setSelectedDriverData(null);
     setError('');

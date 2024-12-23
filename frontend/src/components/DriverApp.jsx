@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import axios from 'axios';
 import './DriverApp.css';
@@ -23,7 +23,7 @@ function DriverApp() {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:3001/api/login', credentials);
+      const response = await axios.post('/api/login', credentials);
       
       if (response.data.success) {
         setToken(response.data.token);
@@ -62,7 +62,7 @@ function DriverApp() {
     setIsSharing(true);
     setStatus('sharing location');
 
-    socketRef.current = io('http://localhost:3001/driver/update', {
+    socketRef.current = io('/driver/update', {
       auth: { token }
     });
 
@@ -88,7 +88,7 @@ function DriverApp() {
       
       socket.emit('location_update', location);
       
-      axios.post('http://localhost:3001/api/driver/update', location, {
+      axios.post('/api/driver/update', location, {
         headers: { Authorization: `Bearer ${token}` }
       }).catch(err => console.error('REST update failed:', err));
       
@@ -97,7 +97,7 @@ function DriverApp() {
     const initialLocation = generateRandomLocation();
     socket.emit('location_update', initialLocation);
     
-    axios.post('http://localhost:3001/api/driver/update', initialLocation, {
+    axios.post('/api/driver/update', initialLocation, {
       headers: { Authorization: `Bearer ${token}` }
     }).catch(err => console.error('Initial location failed:', err));
   };
@@ -116,7 +116,7 @@ function DriverApp() {
     }
 
     try {
-      await axios.post('http://localhost:3001/api/logout', {}, {
+      await axios.post('/api/logout', {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log('Driver removed from online status');
@@ -133,7 +133,7 @@ function DriverApp() {
     }
 
     try {
-      await axios.post('http://localhost:3001/api/logout', {}, {
+      await axios.post('/api/logout', {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log('Driver logged out and removed from online status');
