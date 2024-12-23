@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build output
+build/
+dist/
+frontend/build/
+frontend/dist/
+
+# Test and coverage output
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+
+# Environment files (keep the documented example)
+.env
+.env.*
+!.env.example
+
+# Logs and caches
+logs/
+*.log
+npm-debug.log*
+.npm/
+.eslintcache
+.vite/
+tmp/
+
+# Editors and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Never commit project automation folders
+.github/
