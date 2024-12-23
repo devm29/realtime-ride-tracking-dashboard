@@ -1,94 +1,60 @@
 const config = require('../config/config');
+const logger = require('../utils/logger');
 
 class DriverStore {
-  constructor() {
-    this.activeTokens = new Map(); 
-    this.driverLocations = new Map(); 
-    this.driverSockets = new Map(); 
-    
-    this.startCleanupInterval();
+  constructor({ retentionMs = config.driverDataRetentionMs, sweepIntervalMs = 60000 } = {}) {
+    this.retentionMs = retentionMs;
+    this.sweepIntervalMs = sweepIntervalMs;
+    this.activeTokens = new Map();
+    this.driverLocations = new Map();
+    this.driverSockets = new Map();
+    this.sweepTimer = null;
   }
 
-  /**
-   * Store active token for a driver
-   * @param {string} token - JWT token
-   * @param {string} driverId - Driver ID
-   * @param {Date} expiresAt - Token expiration time
-   */
   storeActiveToken(token, driverId, expiresAt) {
     this.activeTokens.set(token, { driverId, expiresAt });
   }
 
-  /**
-   * Check if token is active and not expired
-   * @param {string} token - JWT token to check
-   * @returns {Object|null} Token data or null if invalid/expired
-   */
   isTokenActive(token) {
     const tokenData = this.activeTokens.get(token);
     if (!tokenData) return null;
-    
+
     if (new Date() > tokenData.expiresAt) {
       this.activeTokens.delete(token);
       return null;
     }
-    
+
     return tokenData;
   }
 
-  /**
-   * @param {string} token 
-   */
   removeActiveToken(token) {
     this.activeTokens.delete(token);
   }
 
-  /**
-   * @param {string} driverId 
-   * @param {number} lat 
-   * @param {number} lng 
-   * @param {Object} profile 
-   */
   updateDriverLocation(driverId, lat, lng, profile = null) {
-    const locationData = {
+    this.driverLocations.set(driverId, {
       lat,
       lng,
       timestamp: new Date(),
       profile: profile || this.getDriverProfile(driverId)
-    };
-    
-    this.driverLocations.set(driverId, locationData);
-    console.log(`Updated location for driver ${driverId}:`, { lat, lng });
+    });
   }
 
-  /**
-   * @param {string} driverId
-   * @returns {Object|null}
-   */
   getDriverLocation(driverId) {
     return this.driverLocations.get(driverId) || null;
   }
 
-  /**
-   * @param {string} driverId 
-   * @returns {Object|null} 
-   */
   getDriverProfile(driverId) {
     const locationData = this.driverLocations.get(driverId);
     return locationData ? locationData.profile : null;
   }
 
-  /**
-   * @returns {Array} 
-   */
   getOnlineDrivers() {
     const now = new Date();
     const onlineDrivers = [];
-    
+
     for (const [driverId, locationData] of this.driverLocations.entries()) {
-      const timeDiff = now - locationData.timestamp;
-      
-      if (timeDiff <= config.driverDataRetentionMs) {
+      if (now - locationData.timestamp <= this.retentionMs) {
         onlineDrivers.push({
           driverId,
           profile: locationData.profile,
@@ -97,86 +63,62 @@ class DriverStore {
         });
       }
     }
-    
+
     return onlineDrivers;
   }
 
-  /**
-   * @param {string} driverId 
-   * @returns {boolean} 
-   */
   isDriverOnline(driverId) {
     const locationData = this.driverLocations.get(driverId);
     if (!locationData) return false;
-    
-    const timeDiff = new Date() - locationData.timestamp;
-    return timeDiff <= config.driverDataRetentionMs;
+    return new Date() - locationData.timestamp <= this.retentionMs;
   }
 
-  /**
-   * @param {string} driverId 
-   * @param {string} socketId 
-   */
   setDriverSocket(driverId, socketId) {
     this.driverSockets.set(driverId, socketId);
   }
 
-  /**
-   * @param {string} driverId 
-   */
   removeDriverSocket(driverId) {
     this.driverSockets.delete(driverId);
   }
 
-  /**
-   * @param {string} driverId
-   * @returns {string|null} 
-   */
   getDriverSocket(driverId) {
     return this.driverSockets.get(driverId) || null;
   }
 
-  /**
-   * @param {string} driverId 
-   */
   removeDriver(driverId) {
     this.driverLocations.delete(driverId);
     this.driverSockets.delete(driverId);
-    console.log(`Driver ${driverId} removed from online status`);
   }
 
- 
-  cleanup() {
+  sweep() {
     const now = new Date();
-    
-   
+
     for (const [token, tokenData] of this.activeTokens.entries()) {
       if (now > tokenData.expiresAt) {
         this.activeTokens.delete(token);
       }
     }
-    
+
+    // Stale locations are kept for a second retention window so "last seen" stays answerable.
     for (const [driverId, locationData] of this.driverLocations.entries()) {
-      const timeDiff = now - locationData.timestamp;
-      if (timeDiff > config.driverDataRetentionMs * 2) { 
+      if (now - locationData.timestamp > this.retentionMs * 2) {
         this.driverLocations.delete(driverId);
         this.driverSockets.delete(driverId);
       }
     }
-    
-    console.log(`Cleanup completed. Active tokens: ${this.activeTokens.size}, Driver locations: ${this.driverLocations.size}`);
   }
 
-
-  startCleanupInterval() {
-    setInterval(() => {
-      this.cleanup();
-    }, 60000); 
+  start() {
+    if (this.sweepTimer) return;
+    this.sweepTimer = setInterval(() => this.sweep(), this.sweepIntervalMs);
+    this.sweepTimer.unref();
   }
 
-  /**
-   * @returns {Object} 
-   */
+  stop() {
+    clearInterval(this.sweepTimer);
+    this.sweepTimer = null;
+  }
+
   getStats() {
     return {
       activeTokens: this.activeTokens.size,
@@ -187,4 +129,4 @@ class DriverStore {
   }
 }
 
-module.exports = new DriverStore(); 
+module.exports = { DriverStore };

@@ -1,9 +1,10 @@
-const driverStore = require('../models/driverStore');
 const { DRIVERS } = require('../utils/auth');
+const logger = require('../utils/logger');
 
 
 async function updateLocation(req, res) {
   try {
+    const driverStore = req.app.locals.store;
     const { lat, lng } = req.body;
     const driverId = req.user.driverId;
 
@@ -32,35 +33,30 @@ async function updateLocation(req, res) {
 
     driverStore.updateDriverLocation(driverId, lat, lng, driverProfile);
 
-    const { io } = require('../server');
-    if (io) {
-      const dashboardNamespace = io.of('/dashboard');
-      
-      dashboardNamespace.emit('driver_location_update', {
+    const dashboardNamespace = req.app.locals.io.of('/dashboard');
+
+    dashboardNamespace.emit('driver_location_update', {
+      driverId,
+      profile: driverProfile,
+      location: { lat, lng },
+      timestamp: new Date().toISOString()
+    });
+
+    if (!wasOnlineBefore) {
+      const onlineDrivers = driverStore.getOnlineDrivers();
+      dashboardNamespace.emit('online_drivers', {
+        drivers: onlineDrivers,
+        count: onlineDrivers.length,
+        timestamp: new Date().toISOString()
+      });
+
+      dashboardNamespace.emit('driver_connected', {
         driverId,
         profile: driverProfile,
         location: { lat, lng },
         timestamp: new Date().toISOString()
       });
-
-      if (!wasOnlineBefore) {
-        const onlineDrivers = driverStore.getOnlineDrivers();
-        dashboardNamespace.emit('online_drivers', {
-          drivers: onlineDrivers,
-          count: onlineDrivers.length,
-          timestamp: new Date().toISOString()
-        });
-
-        dashboardNamespace.emit('driver_connected', {
-          driverId,
-          profile: driverProfile,
-          location: { lat, lng },
-          timestamp: new Date().toISOString()
-        });
-      }
     }
-
-    console.log(`Location updated for driver ${driverProfile.name} (${driverId}): ${lat}, ${lng}`);
 
     res.json({
       success: true,
@@ -70,7 +66,7 @@ async function updateLocation(req, res) {
     });
 
   } catch (error) {
-    console.error('Update location error:', error);
+    logger.error('Update location error:', error);
     res.status(500).json({
       error: 'Internal server error while updating location'
     });
@@ -80,6 +76,7 @@ async function updateLocation(req, res) {
 
 async function getLocation(req, res) {
   try {
+    const driverStore = req.app.locals.store;
     const driverId = req.user.driverId;
     const locationData = driverStore.getDriverLocation(driverId);
 
@@ -100,7 +97,7 @@ async function getLocation(req, res) {
     });
 
   } catch (error) {
-    console.error('Get location error:', error);
+    logger.error('Get location error:', error);
     res.status(500).json({
       error: 'Internal server error while fetching location'
     });
@@ -110,6 +107,7 @@ async function getLocation(req, res) {
 
 async function getOnlineDrivers(req, res) {
   try {
+    const driverStore = req.app.locals.store;
     const onlineDrivers = driverStore.getOnlineDrivers();
     
     res.json({
@@ -120,7 +118,7 @@ async function getOnlineDrivers(req, res) {
     });
 
   } catch (error) {
-    console.error('Get online drivers error:', error);
+    logger.error('Get online drivers error:', error);
     res.status(500).json({
       error: 'Internal server error while fetching online drivers'
     });
@@ -130,6 +128,7 @@ async function getOnlineDrivers(req, res) {
 
 async function getDriverLocation(req, res) {
   try {
+    const driverStore = req.app.locals.store;
     const { driverId } = req.params;
     
     if (!driverId) {
@@ -162,7 +161,7 @@ async function getDriverLocation(req, res) {
     });
 
   } catch (error) {
-    console.error('Get driver location error:', error);
+    logger.error('Get driver location error:', error);
     res.status(500).json({
       error: 'Internal server error while fetching driver location'
     });
@@ -172,6 +171,7 @@ async function getDriverLocation(req, res) {
 
 async function getStats(req, res) {
   try {
+    const driverStore = req.app.locals.store;
     const stats = driverStore.getStats();
     
     res.json({
@@ -181,7 +181,7 @@ async function getStats(req, res) {
     });
 
   } catch (error) {
-    console.error('Get stats error:', error);
+    logger.error('Get stats error:', error);
     res.status(500).json({
       error: 'Internal server error while fetching statistics'
     });

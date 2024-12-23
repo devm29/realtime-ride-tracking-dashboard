@@ -1,6 +1,6 @@
 const { validateDriverCredentials, generateToken } = require('../utils/auth');
-const driverStore = require('../models/driverStore');
 const config = require('../config/config');
+const logger = require('../utils/logger');
 
 async function login(req, res) {
   try {
@@ -19,6 +19,7 @@ async function login(req, res) {
       });
     }
 
+    const driverStore = req.app.locals.store;
     const token = generateToken(driverProfile);
     
     const expiresAt = new Date();
@@ -26,7 +27,7 @@ async function login(req, res) {
     
     driverStore.storeActiveToken(token, driverProfile.id, expiresAt);
 
-    console.log(`Driver ${driverProfile.name} (${driverProfile.id}) logged in successfully`);
+    logger.info(`Driver ${driverProfile.id} logged in`);
 
     res.json({
       success: true,
@@ -37,7 +38,7 @@ async function login(req, res) {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     res.status(500).json({
       error: 'Internal server error during login'
     });
@@ -48,6 +49,7 @@ async function logout(req, res) {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
+    const driverStore = req.app.locals.store;
 
     if (token) {
       driverStore.removeActiveToken(token);
@@ -56,7 +58,7 @@ async function logout(req, res) {
         driverStore.removeDriver(req.user.driverId);
       }
 
-      console.log(`Driver ${req.user?.driverId} logged out and removed from online status`);
+      logger.info(`Driver ${req.user?.driverId} logged out`);
     }
 
     res.json({
@@ -65,7 +67,7 @@ async function logout(req, res) {
     });
 
   } catch (error) {
-    console.error('Logout error:', error);
+    logger.error('Logout error:', error);
     res.status(500).json({
       error: 'Internal server error during logout'
     });
@@ -75,6 +77,7 @@ async function logout(req, res) {
 async function getProfile(req, res) {
   try {
     const driverId = req.user.driverId;
+    const driverStore = req.app.locals.store;
     const locationData = driverStore.getDriverLocation(driverId);
     
     res.json({
@@ -89,7 +92,7 @@ async function getProfile(req, res) {
     });
 
   } catch (error) {
-    console.error('Get profile error:', error);
+    logger.error('Get profile error:', error);
     res.status(500).json({
       error: 'Internal server error while fetching profile'
     });

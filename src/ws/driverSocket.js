@@ -1,5 +1,5 @@
 const { authenticateSocketToken } = require('../utils/auth');
-const driverStore = require('../models/driverStore');
+const logger = require('../utils/logger');
 const { DRIVERS } = require('../utils/auth');
 
 /**
@@ -13,7 +13,7 @@ const { DRIVERS } = require('../utils/auth');
  * - location_update: Driver sends location data
  * - disconnect: Driver disconnects
  */
-function setupDriverSocket(io) {
+function setupDriverSocket(io, driverStore) {
   const driverNamespace = io.of('/driver/update');
 
   // Authentication middleware for driver namespace
@@ -23,7 +23,7 @@ function setupDriverSocket(io) {
     const driverId = socket.user.driverId;
     const driverName = socket.user.name;
 
-    console.log(`Driver ${driverName} (${driverId}) connected via WebSocket`);
+    logger.info(`Driver ${driverName} (${driverId}) connected via WebSocket`);
 
     // Store socket connection for this driver
     driverStore.setDriverSocket(driverId, socket.id);
@@ -98,10 +98,10 @@ function setupDriverSocket(io) {
           });
         }
 
-        console.log(`Real-time location update from ${driverName} (${driverId}): ${lat}, ${lng}`);
+        logger.info(`Real-time location update from ${driverName} (${driverId}): ${lat}, ${lng}`);
 
       } catch (error) {
-        console.error('Location update error:', error);
+        logger.error('Location update error:', error);
         socket.emit('error', { 
           message: 'Failed to process location update' 
         });
@@ -115,7 +115,7 @@ function setupDriverSocket(io) {
         driverId,
         timestamp: new Date().toISOString()
       });
-      console.log(`Driver ${driverName} (${driverId}) started location sharing`);
+      logger.info(`Driver ${driverName} (${driverId}) started location sharing`);
     });
 
     // Handle driver requesting to stop location sharing
@@ -125,7 +125,7 @@ function setupDriverSocket(io) {
         driverId,
         timestamp: new Date().toISOString()
       });
-      console.log(`Driver ${driverName} (${driverId}) stopped location sharing`);
+      logger.info(`Driver ${driverName} (${driverId}) stopped location sharing`);
     });
 
     // Handle ping/pong for connection health
@@ -135,7 +135,7 @@ function setupDriverSocket(io) {
 
     // Handle driver disconnect
     socket.on('disconnect', (reason) => {
-      console.log(`Driver ${driverName} (${driverId}) disconnected: ${reason}`);
+      logger.info(`Driver ${driverName} (${driverId}) disconnected: ${reason}`);
       
       // Remove driver from online status completely
       driverStore.removeDriver(driverId);
@@ -160,7 +160,7 @@ function setupDriverSocket(io) {
 
     // Handle authentication errors during connection
     socket.on('connect_error', (error) => {
-      console.error(`Driver connection error for ${driverId}:`, error.message);
+      logger.error(`Driver connection error for ${driverId}:`, error.message);
     });
 
     // Send welcome message to driver

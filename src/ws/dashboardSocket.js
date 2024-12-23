@@ -1,4 +1,4 @@
-const driverStore = require('../models/driverStore');
+const logger = require('../utils/logger');
 const config = require('../config/config');
 
 /**
@@ -13,11 +13,11 @@ const config = require('../config/config');
  * - unsubscribe: Client unsubscribes from current driver
  * - get_online_drivers: Client requests list of online drivers
  */
-function setupDashboardSocket(io) {
+function setupDashboardSocket(io, driverStore) {
   const dashboardNamespace = io.of('/dashboard');
 
   dashboardNamespace.on('connection', (socket) => {
-    console.log(`Dashboard client connected: ${socket.id}`);
+    logger.info(`Dashboard client connected: ${socket.id}`);
 
     // Join dashboard room for broadcasting
     socket.join('dashboard');
@@ -44,7 +44,7 @@ function setupDashboardSocket(io) {
 
         currentDriverId = driverId;
 
-        console.log(`Dashboard client ${socket.id} subscribed to driver ${driverId}`);
+        logger.info(`Dashboard client ${socket.id} subscribed to driver ${driverId}`);
 
         // Send immediate driver data
         const locationData = driverStore.getDriverLocation(driverId);
@@ -115,7 +115,7 @@ function setupDashboardSocket(io) {
         });
 
       } catch (error) {
-        console.error('Subscription error:', error);
+        logger.error('Subscription error:', error);
         socket.emit('error', { message: 'Failed to subscribe to driver' });
       }
     });
@@ -123,7 +123,7 @@ function setupDashboardSocket(io) {
     // Handle unsubscribe request
     socket.on('unsubscribe', () => {
       if (currentDriverId) {
-        console.log(`Dashboard client ${socket.id} unsubscribed from driver ${currentDriverId}`);
+        logger.info(`Dashboard client ${socket.id} unsubscribed from driver ${currentDriverId}`);
         
         clearInterval(updateInterval);
         clearInterval(offlineNotificationInterval);
@@ -152,7 +152,7 @@ function setupDashboardSocket(io) {
         });
 
       } catch (error) {
-        console.error('Get online drivers error:', error);
+        logger.error('Get online drivers error:', error);
         socket.emit('error', { message: 'Failed to fetch online drivers' });
       }
     });
@@ -191,7 +191,7 @@ function setupDashboardSocket(io) {
         }
 
       } catch (error) {
-        console.error('Get driver info error:', error);
+        logger.error('Get driver info error:', error);
         socket.emit('error', { message: 'Failed to fetch driver info' });
       }
     });
@@ -203,7 +203,7 @@ function setupDashboardSocket(io) {
 
     // Handle client disconnect
     socket.on('disconnect', (reason) => {
-      console.log(`Dashboard client ${socket.id} disconnected: ${reason}`);
+      logger.info(`Dashboard client ${socket.id} disconnected: ${reason}`);
       
       // Clean up intervals
       if (updateInterval) clearInterval(updateInterval);

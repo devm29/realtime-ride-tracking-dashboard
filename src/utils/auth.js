@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/config');
+const logger = require('./logger');
 
 const DRIVERS = {
   driver1: {
@@ -74,7 +75,7 @@ function verifyToken(token) {
   try {
     return jwt.verify(token, config.jwtSecret);
   } catch (error) {
-    console.error('Token verification failed:', error.message);
+    logger.warn('Token verification failed:', error.message);
     return null;
   }
 }
