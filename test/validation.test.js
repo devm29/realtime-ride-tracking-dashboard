@@ -103,6 +103,13 @@ describe('request limits', () => {
 describe('locationGenerator', () => {
   const { generateRandomNYCLocation, generateNearbyLocation, isWithinNYCBounds } = require('../src/utils/locationGenerator');
 
+  it('loads without the server configuration (the simulator runs without JWT_SECRET)', () => {
+    const { execFileSync } = require('node:child_process');
+    const env = { ...process.env, NODE_ENV: 'production', JWT_SECRET: '' };
+    const out = execFileSync(process.execPath, ['-e', "console.log(typeof require('./src/utils/locationGenerator').generateNearbyLocation)"], { env });
+    assert.equal(out.toString().trim(), 'function');
+  });
+
   it('keeps simulated positions inside the NYC box', () => {
     let position = generateRandomNYCLocation();
     for (let i = 0; i < 200; i += 1) {

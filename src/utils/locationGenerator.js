@@ -1,4 +1,4 @@
-const config = require('../config/config');
+const { nycBounds } = require('../config/serviceArea');
 
 /**
  * Generates a random latitude and longitude within NYC bounds
@@ -7,7 +7,7 @@ const config = require('../config/config');
  * @returns {Object} Object containing lat and lng coordinates
  */
 function generateRandomNYCLocation() {
-  const { north, south, east, west } = config.nycBounds;
+  const { north, south, east, west } = nycBounds;
   
   const lat = Math.random() * (north - south) + south;
   const lng = Math.random() * (east - west) + west;
@@ -38,7 +38,7 @@ function generateNearbyLocation(baseLat, baseLng, radiusKm = 5) {
   const newLat = baseLat + deltaLat;
   const newLng = baseLng + deltaLng;
   
-  const { north, south, east, west } = config.nycBounds;
+  const { north, south, east, west } = nycBounds;
   const clampedLat = Math.max(south, Math.min(north, newLat));
   const clampedLng = Math.max(west, Math.min(east, newLng));
   
@@ -49,7 +49,7 @@ function generateNearbyLocation(baseLat, baseLng, radiusKm = 5) {
 }
 
 function isWithinNYCBounds(lat, lng) {
-  const { north, south, east, west } = config.nycBounds;
+  const { north, south, east, west } = nycBounds;
   return lat >= south && lat <= north && lng >= west && lng <= east;
 }
 

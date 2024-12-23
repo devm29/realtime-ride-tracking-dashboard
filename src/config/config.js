@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const path = require('path');
+const { nycBounds } = require('./serviceArea');
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
@@ -32,6 +34,8 @@ const config = {
     nodeEnv === 'production' ? [] : ['http://localhost:5173', 'http://localhost:4173']
   ),
   jwtExpiry: '5m',
+  // Built frontend to serve, if present (the Docker image builds it here).
+  staticDir: process.env.STATIC_DIR || path.join(__dirname, '..', '..', 'frontend', 'dist'),
   dashboardUpdateInterval: 5000,
   offlineDriverNotificationInterval: 60000,
   driverDataRetentionMs: 10 * 60 * 1000,
@@ -42,12 +46,7 @@ const config = {
     // Location updates per window: per driver over REST, per connection over WebSocket.
     locationUpdates: { max: intFromEnv('LOCATION_RATE_LIMIT', 60), windowMs: 60 * 1000 }
   },
-  nycBounds: {
-    north: 40.9176,
-    south: 40.4774,
-    east: -73.7004,
-    west: -74.2591
-  }
+  nycBounds
 };
 
 module.exports = config; 

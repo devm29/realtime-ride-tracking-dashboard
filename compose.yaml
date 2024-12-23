@@ -1,0 +1,32 @@
+services:
+  tracker:
+    build: .
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10}
+      LOCATION_RATE_LIMIT: ${LOCATION_RATE_LIMIT:-60}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  # Optional: three demo drivers moving around the city.
+  # Start with: docker compose --profile demo up --build
+  simulator:
+    build: .
+    profiles: [demo]
+    command: ["node", "scripts/simulate-drivers.js"]
+    environment:
+      SIM_SERVER_URL: http://tracker:3001
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      tracker:
+        condition: service_healthy
+    restart: unless-stopped

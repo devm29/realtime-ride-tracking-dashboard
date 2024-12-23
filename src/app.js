@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -16,7 +18,8 @@ const { setupDashboardSocket } = require('./ws/dashboardSocket');
 function createApp({
   store = new DriverStore(),
   limits = config.rateLimits,
-  corsOrigins = config.corsOrigins
+  corsOrigins = config.corsOrigins,
+  staticDir = config.staticDir
 } = {}) {
   const app = express();
   const server = http.createServer(app);
@@ -33,9 +36,11 @@ function createApp({
   app.locals.store = store;
   app.locals.io = io;
 
+  // Helmet's default CSP fits: scripts, styles and fonts are bundled, and sockets are same-origin.
+  // upgrade-insecure-requests is dropped because it breaks every asset when the stack is
+  // reached over plain HTTP by hostname or LAN address (TLS belongs to a proxy in front).
   app.use(helmet({
-    contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false
+    contentSecurityPolicy: { directives: { upgradeInsecureRequests: null } }
   }));
 
   app.use(cors(originPolicy.corsOptions));
@@ -61,7 +66,7 @@ function createApp({
   app.use('/api', createAuthRouter(limits));
   app.use('/api/driver', createDriverRouter(limits));
 
-  app.get('/', (req, res) => {
+  app.get('/api', (req, res) => {
     res.json({
       message: 'Ride-Sharing Dashboard API',
       version: '1.0.0',
@@ -85,6 +90,11 @@ function createApp({
       }
     });
   });
+
+  // In the container the backend also serves the built UI, so one origin carries pages, API and sockets.
+  if (staticDir && fs.existsSync(path.join(staticDir, 'index.html'))) {
+    app.use(express.static(staticDir, { index: 'index.html', maxAge: '1h' }));
+  }
 
   setupDriverSocket(io, store, limits);
   setupDashboardSocket(io, store);
