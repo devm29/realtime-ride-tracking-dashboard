@@ -17,7 +17,7 @@ function setupDriverSocket(io, driverStore, limits) {
 
     socket.join(`session:${jti}`);
     const allowUpdate = createWindowLimiter(limits.locationUpdates);
-    driverStore.setDriverSocket(driverId, socket.id);
+    driverStore.addDriverSocket(driverId, socket.id);
     logger.info(`Driver ${driverId} connected via WebSocket`);
 
     socket.on('location_update', (data) => {
@@ -75,6 +75,8 @@ function setupDriverSocket(io, driverStore, limits) {
 
     socket.on('disconnect', (reason) => {
       logger.info(`Driver ${driverId} disconnected: ${reason}`);
+      // Another tab or device is still streaming for this driver: keep them online.
+      if (driverStore.removeDriverSocket(driverId, socket.id) > 0) return;
       driverStore.removeDriver(driverId);
 
       const dashboardNamespace = io.of('/dashboard');

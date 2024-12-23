@@ -2,16 +2,27 @@ const config = require('../config/config');
 const logger = require('../utils/logger');
 
 class DriverStore {
-  constructor({ retentionMs = config.driverDataRetentionMs, sweepIntervalMs = 60000 } = {}) {
+  constructor({
+    retentionMs = config.driverDataRetentionMs,
+    sweepIntervalMs = 60000,
+    maxActiveTokens = config.maxActiveTokens
+  } = {}) {
     this.retentionMs = retentionMs;
     this.sweepIntervalMs = sweepIntervalMs;
+    this.maxActiveTokens = maxActiveTokens;
     this.activeTokens = new Map();
     this.driverLocations = new Map();
+    // driverId -> Set of socket ids; a driver may be connected from more than one tab or device.
     this.driverSockets = new Map();
     this.sweepTimer = null;
   }
 
   storeActiveToken(token, driverId, expiresAt) {
+    // Successful logins are not rate limited, so cap the session table. Maps iterate in
+    // insertion order, so the first key is the oldest session.
+    while (this.activeTokens.size >= this.maxActiveTokens) {
+      this.activeTokens.delete(this.activeTokens.keys().next().value);
+    }
     this.activeTokens.set(token, { driverId, expiresAt });
   }
 
@@ -73,16 +84,22 @@ class DriverStore {
     return new Date() - locationData.timestamp <= this.retentionMs;
   }
 
-  setDriverSocket(driverId, socketId) {
-    this.driverSockets.set(driverId, socketId);
+  addDriverSocket(driverId, socketId) {
+    if (!this.driverSockets.has(driverId)) {
+      this.driverSockets.set(driverId, new Set());
+    }
+    this.driverSockets.get(driverId).add(socketId);
   }
 
-  removeDriverSocket(driverId) {
-    this.driverSockets.delete(driverId);
-  }
-
-  getDriverSocket(driverId) {
-    return this.driverSockets.get(driverId) || null;
+  /** Removes one socket and returns how many the driver still has open. */
+  removeDriverSocket(driverId, socketId) {
+    const sockets = this.driverSockets.get(driverId);
+    if (!sockets) return 0;
+    sockets.delete(socketId);
+    if (sockets.size === 0) {
+      this.driverSockets.delete(driverId);
+    }
+    return sockets.size;
   }
 
   removeDriver(driverId) {
@@ -123,7 +140,7 @@ class DriverStore {
     return {
       activeTokens: this.activeTokens.size,
       driverLocations: this.driverLocations.size,
-      connectedSockets: this.driverSockets.size,
+      connectedSockets: [...this.driverSockets.values()].reduce((sum, set) => sum + set.size, 0),
       onlineDrivers: this.getOnlineDrivers().length
     };
   }
