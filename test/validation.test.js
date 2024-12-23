@@ -99,3 +99,15 @@ describe('request limits', () => {
     assert.match((await nextEvent(socket, 'error')).message, /expected an object/);
   });
 });
+
+describe('locationGenerator', () => {
+  const { generateRandomNYCLocation, generateNearbyLocation, isWithinNYCBounds } = require('../src/utils/locationGenerator');
+
+  it('keeps simulated positions inside the NYC box', () => {
+    let position = generateRandomNYCLocation();
+    for (let i = 0; i < 200; i += 1) {
+      assert.ok(isWithinNYCBounds(position.lat, position.lng), JSON.stringify(position));
+      position = generateNearbyLocation(position.lat, position.lng, 5);
+    }
+  });
+});

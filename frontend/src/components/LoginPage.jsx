@@ -2,22 +2,16 @@ import { useState } from 'react';
 import axios from 'axios';
 import './LoginPage.css';
 
-
 function LoginPage({ onLogin }) {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setCredentials(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setCredentials((prev) => ({ ...prev, [name]: value }));
     if (error) setError('');
   };
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,7 +20,7 @@ function LoginPage({ onLogin }) {
 
     try {
       const response = await axios.post('/api/login', credentials);
-      
+
       if (response.data.profile?.role !== 'dispatcher') {
         setError('This sign-in is for the dispatch desk. Drivers use the Driver App.');
       } else {
@@ -45,80 +39,55 @@ function LoginPage({ onLogin }) {
 
   return (
     <div className="login-page">
-      <div className="login-container">
-        <div className="login-header">
-          <h1>🚗 Ride Share Dashboard</h1>
-          <p>Monitor drivers and track real-time locations</p>
-        </div>
+      <section className="login-intro" aria-labelledby="login-intro-title">
+        <p className="eyebrow">Dispatch desk</p>
+        <h1 id="login-intro-title">Every car on the board, as it moves.</h1>
+        <ul className="login-points">
+          <li><strong>Live positions.</strong> Drivers stream their location over WebSockets and appear on the city grid within a second.</li>
+          <li><strong>Online and offline.</strong> The roster updates when a driver starts or stops sharing, with an alert either way.</li>
+          <li><strong>Follow one driver.</strong> Pick a car to get its coordinates every five seconds and a warning when it goes quiet.</li>
+        </ul>
+      </section>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <h2>Dashboard Login</h2>
-          
-          {error && <div className="error-message">{error}</div>}
-          
-          <div className="form-group">
-            <label htmlFor="username">Username:</label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              value={credentials.username}
-              onChange={handleInputChange}
-              placeholder="dispatcher"
-              required
-            />
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="password">Password:</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={credentials.password}
-              onChange={handleInputChange}
-              placeholder="dispatch1"
-              required
-            />
-          </div>
-          
-          <button type="submit" className="btn btn-primary" disabled={isLoading}>
-            {isLoading ? 'Signing In...' : 'Access Dashboard'}
-          </button>
-        </form>
+      <form onSubmit={handleSubmit} className="login-form panel" aria-labelledby="login-form-title">
+        <h2 id="login-form-title">Dashboard login</h2>
 
-        <div className="features-grid">
-          <div className="feature-card">
-            <div className="feature-icon">📍</div>
-            <h3>Real-time Tracking</h3>
-            <p>Monitor driver locations with live updates every 5 seconds</p>
-          </div>
-          
-          <div className="feature-card">
-            <div className="feature-icon">🟢</div>
-            <h3>Online Status</h3>
-            <p>See which drivers are currently online and available</p>
-          </div>
-          
-          <div className="feature-card">
-            <div className="feature-icon">🔔</div>
-            <h3>Smart Notifications</h3>
-            <p>Get alerts when drivers go offline or come back online</p>
-          </div>
-          
-          <div className="feature-card">
-            <div className="feature-icon">📊</div>
-            <h3>Dashboard Analytics</h3>
-            <p>View comprehensive driver statistics and performance metrics</p>
-          </div>
-        </div>
+        {error && <div className="alert alert-error" role="alert">{error}</div>}
 
-        <div className="demo-note">
-          <p><strong>Demo Access:</strong> dispatcher / dispatch1</p>
-        </div>
-      </div>
+        <label htmlFor="username">Username</label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          autoComplete="username"
+          value={credentials.username}
+          onChange={handleInputChange}
+          placeholder="dispatcher"
+          required
+        />
+
+        <label htmlFor="password">Password</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          autoComplete="current-password"
+          value={credentials.password}
+          onChange={handleInputChange}
+          placeholder="dispatch1"
+          required
+        />
+
+        <button type="submit" className="btn btn-primary" disabled={isLoading}>
+          {isLoading ? 'Signing in…' : 'Access dashboard'}
+        </button>
+
+        <p className="demo-note">
+          Demo access: <code>dispatcher</code> / <code>dispatch1</code>
+        </p>
+      </form>
     </div>
   );
 }
 
-export default LoginPage; 
+export default LoginPage;

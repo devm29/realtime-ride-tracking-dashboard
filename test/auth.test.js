@@ -29,7 +29,9 @@ describe('authentication and roles', () => {
     assert.equal((await ctx.http().get('/api/driver/online')).status, 401);
     assert.equal((await ctx.http().get('/api/driver/stats')).status, 401);
     assert.equal((await ctx.http().get('/api/driver/online').set(auth(driverToken))).status, 403);
-    assert.equal((await ctx.http().get('/api/driver/online').set(auth(dispatcherToken))).status, 200);
+    const online = await ctx.http().get('/api/driver/online').set(auth(dispatcherToken));
+    assert.equal(online.status, 200);
+    assert.ok(Array.isArray(online.body.drivers));
   });
 
   it('only lets drivers publish locations', async () => {
@@ -42,6 +44,10 @@ describe('authentication and roles', () => {
       .send({ lat: 40.71, lng: -73.91, driverId: 'driver2' });
     assert.equal(ctx.store.getDriverLocation('driver1').lat, 40.71);
     assert.equal(ctx.store.getDriverLocation('driver2'), null);
+
+    const online = await ctx.http().get('/api/driver/online').set(auth(dispatcherToken));
+    const driver1 = online.body.drivers.find((driver) => driver.driverId === 'driver1');
+    assert.deepEqual(driver1.location, { lat: 40.71, lng: -73.91 });
   });
 
   it('lets a driver read only their own location', async () => {

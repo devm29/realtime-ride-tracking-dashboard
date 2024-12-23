@@ -68,6 +68,7 @@ class DriverStore {
         onlineDrivers.push({
           driverId,
           profile: locationData.profile,
+          location: { lat: locationData.lat, lng: locationData.lng },
           lastSeen: locationData.timestamp,
           isOnline: true
         });

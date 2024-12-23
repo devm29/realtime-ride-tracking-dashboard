@@ -5,81 +5,55 @@ import Dashboard from './components/Dashboard';
 import DriverApp from './components/DriverApp';
 import './App.css';
 
+const MODES = [
+  { id: 'dashboard', label: 'Dispatch' },
+  { id: 'driver', label: 'Driver app' }
+];
+
 function App() {
   const [mode, setMode] = useState('dashboard');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
-
-  const handleLogin = (userData) => {
-    setUser(userData);
-    setIsLoggedIn(true);
-  };
 
   const handleLogout = () => {
     if (user?.token) {
       axios.post('/api/logout', {}, { headers: { Authorization: `Bearer ${user.token}` } }).catch(() => {});
     }
     setUser(null);
-    setIsLoggedIn(false);
   };
 
   const switchMode = (newMode) => {
     setMode(newMode);
-    setIsLoggedIn(false);
     setUser(null);
   };
 
-  if (!isLoggedIn && mode === 'dashboard') {
-    return (
-      <div className="App">
-        <div className="mode-selector">
-          <div className="mode-buttons">
-            <button 
-              className={`mode-btn ${mode === 'dashboard' ? 'active' : ''}`}
-              onClick={() => switchMode('dashboard')}
-            >
-              📊 Dashboard (Client View)
-            </button>
-            <button 
-              className={`mode-btn ${mode === 'driver' ? 'active' : ''}`}
-              onClick={() => switchMode('driver')}
-            >
-              🚗 Driver App
-            </button>
-          </div>
-        </div>
-        <LoginPage onLogin={handleLogin} />
-      </div>
-    );
-  }
-
-  if (mode === 'driver') {
-    return (
-      <div className="App">
-        <div className="mode-selector">
-          <div className="mode-buttons">
-            <button 
-              className={`mode-btn ${mode === 'dashboard' ? 'active' : ''}`}
-              onClick={() => switchMode('dashboard')}
-            >
-              📊 Dashboard (Client View)
-            </button>
-            <button 
-              className={`mode-btn ${mode === 'driver' ? 'active' : ''}`}
-              onClick={() => switchMode('driver')}
-            >
-              🚗 Driver App
-            </button>
-          </div>
-        </div>
-        <DriverApp />
-      </div>
-    );
+  if (mode === 'dashboard' && user) {
+    return <Dashboard user={user} onLogout={handleLogout} />;
   }
 
   return (
-    <div className="App">
-      <Dashboard user={user} onLogout={handleLogout} />
+    <div className="shell">
+      <header className="shell-bar">
+        <span className="brand">
+          <span className="brand-mark" aria-hidden="true" />
+          Ride Tracker
+        </span>
+        <nav className="mode-switch" aria-label="Choose an app">
+          {MODES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="mode-btn"
+              aria-pressed={mode === item.id}
+              onClick={() => switchMode(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </header>
+      <main className="shell-main">
+        {mode === 'dashboard' ? <LoginPage onLogin={setUser} /> : <DriverApp />}
+      </main>
     </div>
   );
 }

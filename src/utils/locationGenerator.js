@@ -19,10 +19,11 @@ function generateRandomNYCLocation() {
 }
 
 /**
- * @param {number} baseLat 
- * @param {number} baseLng 
- * @param {number} radiusKm -
- * @returns {Object}
+ * Picks a random point within radiusKm of the base point, clamped to the NYC box.
+ * @param {number} baseLat
+ * @param {number} baseLng
+ * @param {number} radiusKm
+ * @returns {{lat: number, lng: number}}
  */
 function generateNearbyLocation(baseLat, baseLng, radiusKm = 5) {
   const earthRadiusKm = 6371;

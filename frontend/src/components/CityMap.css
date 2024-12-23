@@ -1,0 +1,82 @@
+.city-map {
+  margin: 0;
+}
+
+.city-map svg {
+  display: block;
+  background: #161b20;
+  width: 100%;
+  max-height: calc(100vh - 160px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.city-map figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font: 0.78rem var(--font-mono);
+}
+
+.map-bg {
+  fill: #161b20;
+}
+
+.map-grid {
+  stroke: #27313b;
+  stroke-width: 1.5;
+}
+
+.map-grid-label {
+  fill: #6f7c89;
+  font: 18px var(--font-mono);
+}
+
+.map-landmark rect {
+  fill: none;
+  stroke: #6f7c89;
+  stroke-width: 2;
+}
+
+.map-landmark text {
+  fill: #8d99a5;
+  font: 600 22px var(--font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.map-driver {
+  cursor: pointer;
+}
+
+.map-trail {
+  fill: none;
+  stroke: var(--amber);
+  stroke-opacity: 0.45;
+  stroke-width: 4;
+  stroke-linejoin: round;
+  stroke-dasharray: 2 8;
+  stroke-linecap: round;
+}
+
+.map-driver-dot {
+  fill: var(--amber);
+  stroke: var(--asphalt);
+  stroke-width: 4;
+}
+
+.map-driver.is-selected .map-driver-dot {
+  fill: var(--amber-strong);
+}
+
+.map-driver-ring {
+  fill: none;
+  stroke: var(--amber-strong);
+  stroke-width: 3;
+}
+
+.map-driver-initials {
+  fill: var(--amber-ink);
+  font: 700 15px var(--font-mono);
+  text-anchor: middle;
+  pointer-events: none;
+}
