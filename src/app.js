@@ -6,22 +6,26 @@ const helmet = require('helmet');
 
 const config = require('./config/config');
 const logger = require('./utils/logger');
+const { createOriginPolicy } = require('./utils/cors');
 const { DriverStore } = require('./models/driverStore');
 const { createAuthRouter } = require('./routes/authRoutes');
 const { createDriverRouter } = require('./routes/driverRoutes');
 const { setupDriverSocket } = require('./ws/driverSocket');
 const { setupDashboardSocket } = require('./ws/dashboardSocket');
 
-function createApp({ store = new DriverStore(), limits = config.rateLimits } = {}) {
+function createApp({
+  store = new DriverStore(),
+  limits = config.rateLimits,
+  corsOrigins = config.corsOrigins
+} = {}) {
   const app = express();
   const server = http.createServer(app);
 
+  const originPolicy = createOriginPolicy(corsOrigins);
+
   const io = new Server(server, {
-    cors: {
-      origin: 'http://localhost:3000',
-      methods: ['GET', 'POST'],
-      credentials: true
-    },
+    cors: originPolicy.corsOptions,
+    allowRequest: originPolicy.allowRequest,
     transports: ['websocket', 'polling'],
     maxHttpBufferSize: 10 * 1024
   });
@@ -34,12 +38,7 @@ function createApp({ store = new DriverStore(), limits = config.rateLimits } = {
     crossOriginEmbedderPolicy: false
   }));
 
-  app.use(cors({
-    origin: 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }));
+  app.use(cors(originPolicy.corsOptions));
 
   // Payloads are tiny coordinate objects and credentials.
   app.use(express.json({ limit: '10kb' }));

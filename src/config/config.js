@@ -4,6 +4,12 @@ require('dotenv').config();
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
+function listFromEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  return raw.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
 function intFromEnv(name, fallback) {
   const value = Number.parseInt(process.env[name], 10);
   return Number.isInteger(value) && value > 0 ? value : fallback;
@@ -22,6 +28,11 @@ const config = {
   port: process.env.PORT || 3001,
   nodeEnv,
   jwtSecret: resolveJwtSecret(),
+  // Extra browser origins allowed to call the API. The page's own host is always allowed.
+  corsOrigins: listFromEnv(
+    'CORS_ORIGINS',
+    nodeEnv === 'production' ? [] : ['http://localhost:5173', 'http://localhost:4173']
+  ),
   jwtExpiry: '5m',
   dashboardUpdateInterval: 5000,
   offlineDriverNotificationInterval: 60000,
