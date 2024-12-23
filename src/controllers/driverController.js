@@ -1,19 +1,11 @@
 const { getDriverProfile, ROLES } = require('../utils/auth');
 const { recordDriverLocation } = require('../services/locationService');
+const { parseLocation } = require('../utils/validation');
 
 function updateLocation(req, res) {
-  const { lat, lng } = req.body || {};
-
-  if (typeof lat !== 'number' || typeof lng !== 'number') {
-    return res.status(400).json({
-      error: 'Invalid location data: lat and lng must be numbers'
-    });
-  }
-
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    return res.status(400).json({
-      error: 'Invalid coordinates: lat must be -90 to 90, lng must be -180 to 180'
-    });
+  const { lat, lng, error } = parseLocation(req.body);
+  if (error) {
+    return res.status(400).json({ error });
   }
 
   // The driver id always comes from the token, never from the request body.

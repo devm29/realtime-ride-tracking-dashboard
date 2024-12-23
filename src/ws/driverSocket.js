@@ -1,12 +1,14 @@
 const { socketAuth, getDriverProfile, ROLES } = require('../utils/auth');
 const { recordDriverLocation } = require('../services/locationService');
+const { parseLocation } = require('../utils/validation');
+const { createWindowLimiter } = require('../utils/windowLimiter');
 const logger = require('../utils/logger');
 
 /**
  * Namespace /driver/update — drivers stream their own position.
  * The handshake must carry a live driver token; the driver id always comes from that token.
  */
-function setupDriverSocket(io, driverStore) {
+function setupDriverSocket(io, driverStore, limits) {
   const driverNamespace = io.of('/driver/update');
   driverNamespace.use(socketAuth(driverStore, ROLES.DRIVER));
 
@@ -14,6 +16,7 @@ function setupDriverSocket(io, driverStore) {
     const { driverId, name: driverName, jti } = socket.user;
 
     socket.join(`session:${jti}`);
+    const allowUpdate = createWindowLimiter(limits.locationUpdates);
     driverStore.setDriverSocket(driverId, socket.id);
     logger.info(`Driver ${driverId} connected via WebSocket`);
 
@@ -25,19 +28,14 @@ function setupDriverSocket(io, driverStore) {
         return;
       }
 
-      const { lat, lng } = data || {};
-
-      if (typeof lat !== 'number' || typeof lng !== 'number') {
-        socket.emit('error', {
-          message: 'Invalid location data: lat and lng must be numbers'
-        });
+      if (!allowUpdate()) {
+        socket.emit('error', { message: 'Too many location updates, slow down' });
         return;
       }
 
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        socket.emit('error', {
-          message: 'Invalid coordinates: lat must be -90 to 90, lng must be -180 to 180'
-        });
+      const { lat, lng, error } = parseLocation(data);
+      if (error) {
+        socket.emit('error', { message: error });
         return;
       }
 

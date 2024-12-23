@@ -4,6 +4,11 @@ require('dotenv').config();
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 
+function intFromEnv(name, fallback) {
+  const value = Number.parseInt(process.env[name], 10);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
 function resolveJwtSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
   if (nodeEnv === 'production') {
@@ -21,6 +26,12 @@ const config = {
   dashboardUpdateInterval: 5000,
   offlineDriverNotificationInterval: 60000,
   driverDataRetentionMs: 10 * 60 * 1000,
+  rateLimits: {
+    // Failed logins per IP per window (successful ones are not counted).
+    login: { max: intFromEnv('LOGIN_RATE_LIMIT', 10), windowMs: 15 * 60 * 1000 },
+    // Location updates per window: per driver over REST, per connection over WebSocket.
+    locationUpdates: { max: intFromEnv('LOCATION_RATE_LIMIT', 60), windowMs: 60 * 1000 }
+  },
   nycBounds: {
     north: 40.9176,
     south: 40.4774,

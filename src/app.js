@@ -7,12 +7,12 @@ const helmet = require('helmet');
 const config = require('./config/config');
 const logger = require('./utils/logger');
 const { DriverStore } = require('./models/driverStore');
-const authRoutes = require('./routes/authRoutes');
-const driverRoutes = require('./routes/driverRoutes');
+const { createAuthRouter } = require('./routes/authRoutes');
+const { createDriverRouter } = require('./routes/driverRoutes');
 const { setupDriverSocket } = require('./ws/driverSocket');
 const { setupDashboardSocket } = require('./ws/dashboardSocket');
 
-function createApp({ store = new DriverStore() } = {}) {
+function createApp({ store = new DriverStore(), limits = config.rateLimits } = {}) {
   const app = express();
   const server = http.createServer(app);
 
@@ -22,7 +22,8 @@ function createApp({ store = new DriverStore() } = {}) {
       methods: ['GET', 'POST'],
       credentials: true
     },
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    maxHttpBufferSize: 10 * 1024
   });
 
   app.locals.store = store;
@@ -40,8 +41,8 @@ function createApp({ store = new DriverStore() } = {}) {
     allowedHeaders: ['Content-Type', 'Authorization']
   }));
 
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // Payloads are tiny coordinate objects and credentials.
+  app.use(express.json({ limit: '10kb' }));
 
   app.use((req, res, next) => {
     logger.info(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -58,8 +59,8 @@ function createApp({ store = new DriverStore() } = {}) {
     });
   });
 
-  app.use('/api', authRoutes);
-  app.use('/api/driver', driverRoutes);
+  app.use('/api', createAuthRouter(limits));
+  app.use('/api/driver', createDriverRouter(limits));
 
   app.get('/', (req, res) => {
     res.json({
@@ -86,7 +87,7 @@ function createApp({ store = new DriverStore() } = {}) {
     });
   });
 
-  setupDriverSocket(io, store);
+  setupDriverSocket(io, store, limits);
   setupDashboardSocket(io, store);
 
   // eslint-disable-next-line no-unused-vars -- Express identifies error handlers by arity
